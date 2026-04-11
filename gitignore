@@ -1,0 +1,37 @@
+# ===========================
+# BACKEND - Spring Boot
+# ===========================
+gestion-formation/target/
+gestion-formation/.idea/
+gestion-formation/*.class
+gestion-formation/*.jar
+gestion-formation/*.war
+gestion-formation/*.log
+
+# ===========================
+# FRONTEND - React / Vite
+# ===========================
+front/front/node_modules/
+front/node_modules/
+front/front/dist/
+front/front/.vite/
+
+# ===========================
+# IDE
+# ===========================
+.idea/
+.vscode/
+*.iml
+
+# ===========================
+# Environnement
+# ===========================
+.env
+.env.local
+.env.production
+
+# ===========================
+# Logs
+# ===========================
+*.log
+npm-debug.log*
