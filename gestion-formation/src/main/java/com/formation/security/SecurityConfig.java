@@ -47,12 +47,23 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        // ✅ Auth publique
                         .requestMatchers("/api/auth/**").permitAll()
+
+                        // ✅ Admin : gestion users + tables secondaires
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        // ✅ Formations : accessibles par USER et ADMIN
+                        .requestMatchers("/api/domaines/**").hasRole("ADMIN")
+                        .requestMatchers("/api/profils/**").hasRole("ADMIN")
+                        .requestMatchers("/api/structures/**").hasRole("ADMIN")
+                        .requestMatchers("/api/employeurs/**").hasRole("ADMIN")
+
+                        // ✅ Formations : USER et ADMIN
                         .requestMatchers("/api/formations/**").hasAnyRole("USER", "ADMIN")
-                        // ✅ Stats : accessibles par RESPONSABLE et ADMIN
-                        .requestMatchers("/api/stats/**").hasAnyRole("RESPONSABLE", "ADMIN")
+
+                        // ✅ Formateurs + Participants : USER et ADMIN
+                        .requestMatchers("/api/formateurs/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers("/api/participants/**").hasAnyRole("USER", "ADMIN")
+
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter,
@@ -62,7 +73,7 @@ public class SecurityConfig {
     }
 
     @Bean
-       public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
 }

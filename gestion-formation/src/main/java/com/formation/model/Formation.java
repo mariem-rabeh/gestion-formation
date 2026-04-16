@@ -4,6 +4,11 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "formations")
@@ -25,7 +30,30 @@ public class Formation {
 
     private double budget;
 
-        
+    private LocalDate dateDebut;
+
+    private LocalDate dateFin;
+
+    // ✅ Relation avec Domaine
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "domaine_id", nullable = true)
+    private Domaine domaine;
+
+    // ✅ Relation avec Formateur
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "formateur_id", nullable = true)
+    private Formateur formateur;
+
+    // ✅ Relation ManyToMany avec Participant
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "formation_participants",
+            joinColumns = @JoinColumn(name = "formation_id"),
+            inverseJoinColumns = @JoinColumn(name = "participant_id")
+    )
+    @JsonIgnoreProperties({"formations"})
+    private Set<Participant> participants = new HashSet<>();
+
     public Formation() {}
 
     public Long getId() { return id; }
@@ -42,4 +70,19 @@ public class Formation {
 
     public double getBudget() { return budget; }
     public void setBudget(double budget) { this.budget = budget; }
+
+    public LocalDate getDateDebut() { return dateDebut; }
+    public void setDateDebut(LocalDate dateDebut) { this.dateDebut = dateDebut; }
+
+    public LocalDate getDateFin() { return dateFin; }
+    public void setDateFin(LocalDate dateFin) { this.dateFin = dateFin; }
+
+    public Domaine getDomaine() { return domaine; }
+    public void setDomaine(Domaine domaine) { this.domaine = domaine; }
+
+    public Formateur getFormateur() { return formateur; }
+    public void setFormateur(Formateur formateur) { this.formateur = formateur; }
+
+    public Set<Participant> getParticipants() { return participants; }
+    public void setParticipants(Set<Participant> participants) { this.participants = participants; }
 }

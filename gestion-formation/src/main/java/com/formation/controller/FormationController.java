@@ -48,4 +48,32 @@ public class FormationController {
         formationService.delete(id);
         return ResponseEntity.ok("Formation supprimée avec succès");
     }
+
+    // ✅ POST /api/formations/{id}/participants — ajouter participants
+    @PostMapping("/{id}/participants")
+    public ResponseEntity<Formation> addParticipants(@PathVariable Long id,
+                                                     @RequestBody List<Long> participantIds) {
+        return ResponseEntity.ok(formationService.addParticipants(id, participantIds));
+    }
+
+    // ✅ PUT /api/formations/{id}/participants — remplacer tous les participants
+    @PutMapping("/{id}/participants")
+    public ResponseEntity<Formation> setParticipants(@PathVariable Long id,
+                                                     @RequestBody List<Long> participantIds) {
+        return ResponseEntity.ok(formationService.setParticipants(id, participantIds));
+    }
+
+    // ✅ DELETE /api/formations/{id}/participants/{participantId}
+    @DeleteMapping("/{id}/participants/{participantId}")
+    public ResponseEntity<Formation> removeParticipant(@PathVariable Long id,
+                                                       @PathVariable Long participantId) {
+        return ResponseEntity.ok(formationService.removeParticipant(id, participantId));
+    }
+
+    // ✅ PUT /api/formations/{id}/formateur/{formateurId} — assigner formateur
+    @PutMapping("/{id}/formateur/{formateurId}")
+    public ResponseEntity<Formation> assignFormateur(@PathVariable Long id,
+                                                     @PathVariable Long formateurId) {
+        return ResponseEntity.ok(formationService.assignFormateur(id, formateurId));
+    }
 }
