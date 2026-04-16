@@ -1,5 +1,6 @@
 package com.formation.controller;
 
+import com.formation.dto.PlanificationRequest;
 import com.formation.model.Formation;
 import com.formation.service.FormationService;
 import org.springframework.http.ResponseEntity;
@@ -75,5 +76,24 @@ public class FormationController {
     public ResponseEntity<Formation> assignFormateur(@PathVariable Long id,
                                                      @PathVariable Long formateurId) {
         return ResponseEntity.ok(formationService.assignFormateur(id, formateurId));
+    }
+
+    /**
+     * ✅ PUT /api/formations/{id}/planifier
+     * Endpoint tout-en-un : assigne formateur + dates + participants en une seule requête.
+     * Utilisé par la page de planification frontend.
+     *
+     * Body JSON :
+     * {
+     *   "formateurId": 3,
+     *   "dateDebut": "2025-09-01",
+     *   "dateFin": "2025-09-05",
+     *   "participantIds": [1, 4, 7]
+     * }
+     */
+    @PutMapping("/{id}/planifier")
+    public ResponseEntity<Formation> planifier(@PathVariable Long id,
+                                               @RequestBody PlanificationRequest req) {
+        return ResponseEntity.ok(formationService.planifier(id, req));
     }
 }

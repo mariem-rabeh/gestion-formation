@@ -53,8 +53,6 @@ public class SecurityConfig {
                         // ✅ Admin : gestion users + tables secondaires
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/domaines/**").hasRole("ADMIN")
-                        .requestMatchers("/api/profils/**").hasRole("ADMIN")
-                        .requestMatchers("/api/structures/**").hasRole("ADMIN")
                         .requestMatchers("/api/employeurs/**").hasRole("ADMIN")
 
                         // ✅ Formations : USER et ADMIN
@@ -63,6 +61,8 @@ public class SecurityConfig {
                         // ✅ Formateurs + Participants : USER et ADMIN
                         .requestMatchers("/api/formateurs/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers("/api/participants/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers("/api/profils/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers("/api/structures/**").hasAnyRole("USER", "ADMIN")
 
                         .anyRequest().authenticated()
                 )

@@ -42,13 +42,22 @@ export const createFormation = (data) => request("POST", "/formations", data);
 export const updateFormation = (id, data) => request("PUT", `/formations/${id}`, data);
 export const deleteFormation = (id) => request("DELETE", `/formations/${id}`);
 
-/**
- * Associer des participants à une formation
- * @param {number} formationId
- * @param {number[]} participantIds
- */
+/** Remplace la liste complète des participants d'une formation */
 export const setFormationParticipants = (formationId, participantIds) =>
   request("PUT", `/formations/${formationId}/participants`, participantIds);
+
+/** Assigne un formateur à une formation via son id */
+export const assignFormateur = (formationId, formateurId) =>
+  request("PUT", `/formations/${formationId}/formateur/${formateurId}`);
+
+/**
+ * Planification tout-en-un :
+ * assigne formateur + dates + participants en une seule requête.
+ * @param {number} formationId
+ * @param {{ formateurId?: number, dateDebut?: string, dateFin?: string, participantIds?: number[] }} data
+ */
+export const planifierFormation = (formationId, data) =>
+  request("PUT", `/formations/${formationId}/planifier`, data);
 
 // ─── FORMATEURS ────────────────────────────────────────
 export const formateurApi = {

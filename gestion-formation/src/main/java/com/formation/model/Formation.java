@@ -45,7 +45,7 @@ public class Formation {
     private Formateur formateur;
 
     // ✅ Relation ManyToMany avec Participant
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "formation_participants",
             joinColumns = @JoinColumn(name = "formation_id"),

@@ -1,5 +1,6 @@
 package com.formation.service;
 
+import com.formation.dto.PlanificationRequest;
 import com.formation.model.*;
 import com.formation.repository.*;
 import org.springframework.stereotype.Service;
@@ -50,7 +51,6 @@ public class FormationService {
         existing.setDateDebut(updated.getDateDebut());
         existing.setDateFin(updated.getDateFin());
 
-        // Formateur
         if (updated.getFormateur() != null && updated.getFormateur().getId() != null) {
             Formateur formateur = formateurRepository.findById(updated.getFormateur().getId())
                     .orElseThrow(() -> new RuntimeException("Formateur non trouvé"));
@@ -59,7 +59,6 @@ public class FormationService {
             existing.setFormateur(null);
         }
 
-        // Domaine
         if (updated.getDomaine() != null && updated.getDomaine().getId() != null) {
             Domaine domaine = domaineRepository.findById(updated.getDomaine().getId())
                     .orElseThrow(() -> new RuntimeException("Domaine non trouvé"));
@@ -76,35 +75,23 @@ public class FormationService {
         formationRepository.deleteById(id);
     }
 
-    // ✅ Ajouter des participants à une formation
+    // ─── Participants ─────────────────────────────────────────────────────────
+
     @Transactional
     public Formation addParticipants(Long formationId, List<Long> participantIds) {
         Formation formation = findById(formationId);
-
-        Set<Participant> participants = participantIds.stream()
-                .map(pid -> participantRepository.findById(pid)
-                        .orElseThrow(() -> new RuntimeException("Participant non trouvé : " + pid)))
-                .collect(Collectors.toSet());
-
-        formation.getParticipants().addAll(participants);
+        Set<Participant> toAdd = resolveParticipants(participantIds);
+        formation.getParticipants().addAll(toAdd);
         return formationRepository.save(formation);
     }
 
-    // ✅ Remplacer la liste complète des participants
     @Transactional
     public Formation setParticipants(Long formationId, List<Long> participantIds) {
         Formation formation = findById(formationId);
-
-        Set<Participant> participants = participantIds.stream()
-                .map(pid -> participantRepository.findById(pid)
-                        .orElseThrow(() -> new RuntimeException("Participant non trouvé : " + pid)))
-                .collect(Collectors.toSet());
-
-        formation.setParticipants(participants);
+        formation.setParticipants(resolveParticipants(participantIds));
         return formationRepository.save(formation);
     }
 
-    // ✅ Retirer un participant d'une formation
     @Transactional
     public Formation removeParticipant(Long formationId, Long participantId) {
         Formation formation = findById(formationId);
@@ -112,7 +99,8 @@ public class FormationService {
         return formationRepository.save(formation);
     }
 
-    // ✅ Assigner un formateur à une formation
+    // ─── Formateur ────────────────────────────────────────────────────────────
+
     @Transactional
     public Formation assignFormateur(Long formationId, Long formateurId) {
         Formation formation = findById(formationId);
@@ -122,13 +110,58 @@ public class FormationService {
         return formationRepository.save(formation);
     }
 
+    // ─── Planification tout-en-un ─────────────────────────────────────────────
+
+    /**
+     * Assigne en une seule transaction :
+     *  - le formateur (optionnel)
+     *  - les dates de début et de fin (optionnelles)
+     *  - la liste complète des participants (optionnelle)
+     */
+    @Transactional
+    public Formation planifier(Long formationId, PlanificationRequest req) {
+        Formation formation = findById(formationId);
+
+        // Formateur
+        if (req.getFormateurId() != null) {
+            Formateur formateur = formateurRepository.findById(req.getFormateurId())
+                    .orElseThrow(() -> new RuntimeException("Formateur non trouvé : " + req.getFormateurId()));
+            formation.setFormateur(formateur);
+        }
+
+        // Dates
+        if (req.getDateDebut() != null) formation.setDateDebut(req.getDateDebut());
+        if (req.getDateFin() != null)   formation.setDateFin(req.getDateFin());
+
+        // Validation cohérence des dates
+        if (formation.getDateDebut() != null && formation.getDateFin() != null
+                && formation.getDateFin().isBefore(formation.getDateDebut())) {
+            throw new RuntimeException("La date de fin doit être postérieure à la date de début");
+        }
+
+        // Participants
+        if (req.getParticipantIds() != null) {
+            formation.setParticipants(resolveParticipants(req.getParticipantIds()));
+        }
+
+        return formationRepository.save(formation);
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    private Set<Participant> resolveParticipants(List<Long> ids) {
+        return ids.stream()
+                .map(pid -> participantRepository.findById(pid)
+                        .orElseThrow(() -> new RuntimeException("Participant non trouvé : " + pid)))
+                .collect(Collectors.toSet());
+    }
+
     private void resolveRelations(Formation formation) {
         if (formation.getFormateur() != null && formation.getFormateur().getId() != null) {
             Formateur formateur = formateurRepository.findById(formation.getFormateur().getId())
                     .orElseThrow(() -> new RuntimeException("Formateur non trouvé"));
             formation.setFormateur(formateur);
         }
-
         if (formation.getDomaine() != null && formation.getDomaine().getId() != null) {
             Domaine domaine = domaineRepository.findById(formation.getDomaine().getId())
                     .orElseThrow(() -> new RuntimeException("Domaine non trouvé"));

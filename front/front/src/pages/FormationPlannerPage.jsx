@@ -1,12 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   getFormations,
   createFormation,
   updateFormation,
   deleteFormation,
-  setFormationParticipants,
+  planifierFormation,
+  formateurApi,
+  participantApi,
+  domaineApi,
 } from "../api";
-import { formateurApi, participantApi, domaineApi } from "../api";
+
+// ─── empty state helpers ──────────────────────────────────────────────────────
 
 const emptyForm = {
   titre: "",
@@ -19,22 +23,38 @@ const emptyForm = {
   formateur: null,
 };
 
+const emptyPlan = {
+  formateurId: "",
+  dateDebut: "",
+  dateFin: "",
+  participantIds: [],
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function FormationPlannerPage() {
+  // ── data ──
   const [formations, setFormations] = useState([]);
   const [formateurs, setFormateurs] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [domaines, setDomaines] = useState([]);
 
-  const [form, setForm] = useState(emptyForm);
-  const [editId, setEditId] = useState(null);
-  const [selectedFormation, setSelectedFormation] = useState(null);
-  const [selectedParticipants, setSelectedParticipants] = useState([]);
-
+  // ── ui state ──
+  const [tab, setTab] = useState("list");         // "list" | "form" | "plan"
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState("list");
 
+  // ── form (create/edit) ──
+  const [form, setForm] = useState(emptyForm);
+  const [editId, setEditId] = useState(null);
+
+  // ── planner ──
+  const [selectedFormation, setSelectedFormation] = useState(null);
+  const [plan, setPlan] = useState(emptyPlan);
+  const [search, setSearch] = useState("");
+
+  // ── load all data ──────────────────────────────────────────────────────────
   const load = async () => {
     setLoading(true);
     try {
@@ -48,8 +68,8 @@ export default function FormationPlannerPage() {
       setFormateurs(fmt);
       setParticipants(p);
       setDomaines(d);
-    } catch (e) {
-      setError("Erreur chargement données");
+    } catch {
+      setError("Erreur lors du chargement des données");
     } finally {
       setLoading(false);
     }
@@ -57,73 +77,112 @@ export default function FormationPlannerPage() {
 
   useEffect(() => { load(); }, []);
 
-  // ── PLANIFICATION ──
+  // ── helpers ───────────────────────────────────────────────────────────────
+  const notify = (msg, isError = false) => {
+    if (isError) { setError(msg); setSuccess(""); }
+    else { setSuccess(msg); setError(""); }
+  };
+
+  const goList = () => setTab("list");
+
+  // ── filtered participants list (search) ────────────────────────────────────
+  const filteredParticipants = useMemo(() => {
+    if (!search.trim()) return participants;
+    const q = search.toLowerCase();
+    return participants.filter(
+      (p) =>
+        p.nom.toLowerCase().includes(q) ||
+        p.prenom.toLowerCase().includes(q) ||
+        (p.email || "").toLowerCase().includes(q)
+    );
+  }, [participants, search]);
+
+  // ─── PLANNER ──────────────────────────────────────────────────────────────
   const openPlanner = (formation) => {
     setSelectedFormation(formation);
-    setSelectedParticipants(formation.participants?.map((p) => p.id) ?? []);
+    setPlan({
+      formateurId: formation.formateur?.id ?? "",
+      dateDebut: formation.dateDebut ?? "",
+      dateFin: formation.dateFin ?? "",
+      participantIds: (formation.participants ?? []).map((p) => p.id),
+    });
+    setSearch("");
+    setError("");
+    setSuccess("");
     setTab("plan");
   };
 
   const toggleParticipant = (id) => {
-    setSelectedParticipants((prev) => {
-      const set = new Set(prev);
+    setPlan((prev) => {
+      const set = new Set(prev.participantIds);
       set.has(id) ? set.delete(id) : set.add(id);
-      return [...set];
+      return { ...prev, participantIds: [...set] };
     });
   };
 
+  const selectAll = () =>
+    setPlan((prev) => ({
+      ...prev,
+      participantIds: filteredParticipants.map((p) => p.id),
+    }));
+
+  const clearAll = () =>
+    setPlan((prev) => ({ ...prev, participantIds: [] }));
+
   const savePlan = async () => {
+    if (plan.dateDebut && plan.dateFin && plan.dateDebut > plan.dateFin) {
+      return notify("La date de fin doit être après la date de début", true);
+    }
     setLoading(true);
-    setError("");
-    setSuccess("");
     try {
-      await setFormationParticipants(selectedFormation.id, selectedParticipants);
-      setSuccess("Planification enregistrée !");
+      await planifierFormation(selectedFormation.id, {
+        formateurId: plan.formateurId ? Number(plan.formateurId) : null,
+        dateDebut: plan.dateDebut || null,
+        dateFin: plan.dateFin || null,
+        participantIds: plan.participantIds,
+      });
+      notify("✅ Planification enregistrée !");
       await load();
-      setTab("list");
+      goList();
     } catch (e) {
-      setError(e.response?.data?.message || "Erreur sauvegarde");
+      notify(e.message || "Erreur lors de la sauvegarde", true);
     } finally {
       setLoading(false);
     }
   };
 
-  // ── FORMULAIRE ──
+  // ─── FORM (create / edit) ─────────────────────────────────────────────────
   const handleSubmit = async () => {
     setError("");
-    setSuccess("");
-
-    if (!form.titre.trim()) return setError("Le titre est requis");
-    if (form.duree <= 0) return setError("Durée invalide");
-    if (form.budget < 0) return setError("Budget invalide");
-
-    if (form.dateDebut && form.dateFin && form.dateDebut > form.dateFin) {
-      return setError("Date fin doit être après date début");
-    }
+    if (!form.titre.trim()) return notify("Le titre est requis", true);
+    if (form.duree <= 0) return notify("La durée doit être supérieure à 0", true);
+    if (form.budget < 0) return notify("Budget invalide", true);
+    if (form.dateDebut && form.dateFin && form.dateDebut > form.dateFin)
+      return notify("La date de fin doit être après la date de début", true);
 
     setLoading(true);
     try {
       const payload = {
         ...form,
+        annee: Number(form.annee),
+        duree: Number(form.duree),
+        budget: Number(form.budget),
         domaine: form.domaine ? { id: Number(form.domaine) } : null,
         formateur: form.formateur ? { id: Number(form.formateur) } : null,
       };
-
       if (editId) {
         await updateFormation(editId, payload);
-        setSuccess("Formation modifiée !");
+        notify("✅ Formation modifiée !");
       } else {
         await createFormation(payload);
-        setSuccess("Formation créée !");
+        notify("✅ Formation créée !");
       }
-
       setForm(emptyForm);
       setEditId(null);
       await load();
-      setTab("list");
-
+      goList();
     } catch (e) {
-      setError(e.response?.data?.message || "Erreur enregistrement");
+      notify(e.message || "Erreur lors de l'enregistrement", true);
     } finally {
       setLoading(false);
     }
@@ -141,154 +200,375 @@ export default function FormationPlannerPage() {
       domaine: f.domaine?.id ?? null,
       formateur: f.formateur?.id ?? null,
     });
+    setError("");
+    setSuccess("");
     setTab("form");
   };
 
   const handleDelete = async (id) => {
     if (!confirm("Supprimer cette formation ?")) return;
-
     setLoading(true);
     try {
       await deleteFormation(id);
-      setSuccess("Formation supprimée !");
+      notify("Formation supprimée !");
       await load();
     } catch {
-      setError("Erreur suppression");
+      notify("Erreur lors de la suppression", true);
     } finally {
       setLoading(false);
     }
   };
 
-  const s = styles;
-
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div style={s.page}>
+      {/* ── Header ── */}
       <div style={s.header}>
-        <h2 style={s.title}>📋 Gestion des Formations</h2>
-        <div style={s.tabs}>
-          <button style={tab === "list" ? s.tabActive : s.tab} onClick={() => setTab("list")}>
-            Liste
-          </button>
-          <button style={tab === "form" ? s.tabActive : s.tab}
-            onClick={() => { setTab("form"); setEditId(null); setForm(emptyForm); }}>
+        <h2 style={s.pageTitle}>📋 Gestion des Formations</h2>
+        <div style={s.tabBar}>
+          <TabBtn active={tab === "list"} onClick={goList}>Liste</TabBtn>
+          <TabBtn
+            active={tab === "form" && !editId}
+            onClick={() => { setEditId(null); setForm(emptyForm); setError(""); setSuccess(""); setTab("form"); }}
+          >
             + Nouvelle formation
-          </button>
+          </TabBtn>
         </div>
       </div>
 
-      {loading && <p style={{ textAlign: "center" }}>⏳ Chargement...</p>}
-      {error && <p style={s.error}>{error}</p>}
-      {success && <p style={s.success}>{success}</p>}
+      {/* ── Alerts ── */}
+      {loading && <p style={s.info}>⏳ Chargement…</p>}
+      {error   && <p style={s.alertError}>{error}</p>}
+      {success && <p style={s.alertSuccess}>{success}</p>}
 
-      {/* LISTE */}
+      {/* ════════════════════════════════════════════
+          TAB : LISTE
+      ════════════════════════════════════════════ */}
       {tab === "list" && (
         <div style={s.card}>
           {formations.length === 0 ? (
-            <p style={s.empty}>Aucune formation</p>
+            <p style={s.empty}>Aucune formation enregistrée.</p>
           ) : (
-            <table style={s.table}>
-              <thead>
-                <tr>
-                  <th style={s.th}>Titre</th>
-                  <th style={s.th}>Année</th>
-                  <th style={s.th}>Durée</th>
-                  <th style={s.th}>Dates</th>
-                  <th style={s.th}>Formateur</th>
-                  <th style={s.th}>Participants</th>
-                  <th style={s.th}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {formations.map((f) => (
-                  <tr key={f.id}>
-                    <td style={s.td}><strong>{f.titre}</strong></td>
-                    <td style={s.td}>{f.annee}</td>
-                    <td style={s.td}>{f.duree}j</td>
-                    <td style={{ ...s.td, fontSize: 11 }}>
-                      {f.dateDebut} → {f.dateFin}
-                    </td>
-                    <td style={s.td}>
-                      {f.formateur ? `${f.formateur.prenom} ${f.formateur.nom}` : "—"}
-                    </td>
-                    <td style={s.td}>{f.participants?.length ?? 0}</td>
-                    <td style={s.td}>
-                      <button style={s.btnBlue} onClick={() => openPlanner(f)}>Planifier</button>
-                      <button style={s.btnEdit} onClick={() => handleEdit(f)}>Modifier</button>
-                      <button style={s.btnDelete} onClick={() => handleDelete(f.id)}>Supprimer</button>
-                    </td>
+            <div style={{ overflowX: "auto" }}>
+              <table style={s.table}>
+                <thead>
+                  <tr>
+                    {["Titre", "Année", "Durée", "Dates", "Formateur", "Participants", "Actions"].map(
+                      (h) => <th key={h} style={s.th}>{h}</th>
+                    )}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {formations.map((f) => (
+                    <tr key={f.id} style={s.row}>
+                      <td style={s.td}><strong>{f.titre}</strong></td>
+                      <td style={s.td}>{f.annee}</td>
+                      <td style={s.td}>{f.duree}j</td>
+                      <td style={{ ...s.td, fontSize: 12, color: "#555" }}>
+                        {f.dateDebut
+                          ? <>{fmt(f.dateDebut)} → {fmt(f.dateFin)}</>
+                          : <span style={{ color: "#bbb" }}>—</span>}
+                      </td>
+                      <td style={s.td}>
+                        {f.formateur
+                          ? <span style={s.badge}>{f.formateur.prenom} {f.formateur.nom}</span>
+                          : <span style={{ color: "#bbb" }}>—</span>}
+                      </td>
+                      <td style={{ ...s.td, textAlign: "center" }}>
+                        <span style={s.countBadge}>{f.participants?.length ?? 0}</span>
+                      </td>
+                      <td style={s.td}>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                          <Btn color="#3b82f6" onClick={() => openPlanner(f)}>📅 Planifier</Btn>
+                          <Btn color="#f59e0b" onClick={() => handleEdit(f)}>✏️ Modifier</Btn>
+                          <Btn color="#ef4444" onClick={() => handleDelete(f.id)}>🗑 Supprimer</Btn>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
 
-      {/* FORM */}
+      {/* ════════════════════════════════════════════
+          TAB : FORMULAIRE création / édition
+      ════════════════════════════════════════════ */}
       {tab === "form" && (
         <div style={s.card}>
-          <h3>{editId ? "Modifier" : "Créer"} formation</h3>
+          <h3 style={s.sectionTitle}>{editId ? "✏️ Modifier" : "➕ Créer"} une formation</h3>
 
-          <input style={s.input} placeholder="Titre"
-            value={form.titre}
-            onChange={(e) => setForm({ ...form, titre: e.target.value })} />
+          <div style={s.grid2}>
+            <Field label="Titre *">
+              <input style={s.input} placeholder="Titre de la formation"
+                value={form.titre}
+                onChange={(e) => setForm({ ...form, titre: e.target.value })} />
+            </Field>
 
-          <button style={s.btnPrimary} onClick={handleSubmit}>
-            Enregistrer
-          </button>
+            <Field label="Année *">
+              <input style={s.input} type="number" min="2000" max="2100"
+                value={form.annee}
+                onChange={(e) => setForm({ ...form, annee: e.target.value })} />
+            </Field>
+
+            <Field label="Durée (jours) *">
+              <input style={s.input} type="number" min="1"
+                value={form.duree}
+                onChange={(e) => setForm({ ...form, duree: e.target.value })} />
+            </Field>
+
+            <Field label="Budget (DT)">
+              <input style={s.input} type="number" min="0"
+                value={form.budget}
+                onChange={(e) => setForm({ ...form, budget: e.target.value })} />
+            </Field>
+
+            <Field label="Date de début">
+              <input style={s.input} type="date"
+                value={form.dateDebut}
+                onChange={(e) => setForm({ ...form, dateDebut: e.target.value })} />
+            </Field>
+
+            <Field label="Date de fin">
+              <input style={s.input} type="date"
+                value={form.dateFin}
+                min={form.dateDebut || undefined}
+                onChange={(e) => setForm({ ...form, dateFin: e.target.value })} />
+            </Field>
+
+            <Field label="Domaine">
+              <select style={s.input}
+                value={form.domaine ?? ""}
+                onChange={(e) => setForm({ ...form, domaine: e.target.value || null })}>
+                <option value="">— Aucun —</option>
+                {domaines.map((d) => (
+                  <option key={d.id} value={d.id}>{d.libelle ?? d.nom}</option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Formateur">
+              <select style={s.input}
+                value={form.formateur ?? ""}
+                onChange={(e) => setForm({ ...form, formateur: e.target.value || null })}>
+                <option value="">— Non assigné —</option>
+                {formateurs.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.prenom} {f.nom} ({f.type})
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+            <Btn color="#10b981" onClick={handleSubmit} disabled={loading}>
+              {loading ? "Enregistrement…" : editId ? "Enregistrer les modifications" : "Créer la formation"}
+            </Btn>
+            <Btn color="#6b7280" onClick={goList}>Annuler</Btn>
+          </div>
         </div>
       )}
 
-      {/* PLANIFICATION */}
+      {/* ════════════════════════════════════════════
+          TAB : PLANIFICATION
+      ════════════════════════════════════════════ */}
       {tab === "plan" && selectedFormation && (
         <div style={s.card}>
-          <h3>Planification : {selectedFormation.titre}</h3>
+          <h3 style={s.sectionTitle}>
+            📅 Planifier : <em>{selectedFormation.titre}</em>
+          </h3>
 
-          <div style={s.participantGrid}>
-            {participants.map((p) => {
-              const checked = selectedParticipants.includes(p.id);
-              return (
-                <div key={p.id}
-                  style={{ ...s.participantCard, ...(checked ? s.participantCardActive : {}) }}
-                  onClick={() => toggleParticipant(p.id)}
-                >
-                  <input type="checkbox" checked={checked} readOnly />
-                  {p.prenom} {p.nom}
-                </div>
-              );
-            })}
+          {/* ── Formateur + Dates ── */}
+          <div style={s.grid2}>
+            <Field label="Formateur *">
+              <select style={s.input}
+                value={plan.formateurId}
+                onChange={(e) => setPlan({ ...plan, formateurId: e.target.value })}>
+                <option value="">— Non assigné —</option>
+                {formateurs.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.prenom} {f.nom}
+                    {f.type === "externe" ? ` (externe — ${f.employeur?.nom ?? "?"})` : " (interne)"}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <div /> {/* spacer */}
+
+            <Field label="Date de début">
+              <input style={s.input} type="date"
+                value={plan.dateDebut}
+                onChange={(e) => setPlan({ ...plan, dateDebut: e.target.value })} />
+            </Field>
+
+            <Field label="Date de fin">
+              <input style={s.input} type="date"
+                value={plan.dateFin}
+                min={plan.dateDebut || undefined}
+                onChange={(e) => setPlan({ ...plan, dateFin: e.target.value })} />
+            </Field>
           </div>
 
-          <button style={s.btnPrimary} onClick={savePlan}>
-            Sauvegarder
-          </button>
+          {/* ── Participants ── */}
+          <div style={{ marginTop: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <h4 style={{ margin: 0 }}>
+                👥 Participants{" "}
+                <span style={s.countBadge}>{plan.participantIds.length} sélectionné(s)</span>
+              </h4>
+              <div style={{ display: "flex", gap: 6 }}>
+                <Btn color="#6366f1" onClick={selectAll} small>Tout sélectionner</Btn>
+                <Btn color="#6b7280" onClick={clearAll} small>Tout effacer</Btn>
+              </div>
+            </div>
+
+            {/* Search */}
+            <input
+              style={{ ...s.input, marginBottom: 12 }}
+              placeholder="🔍 Rechercher un participant (nom, prénom, email)…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+
+            {/* Grid */}
+            {filteredParticipants.length === 0 ? (
+              <p style={s.empty}>Aucun participant trouvé.</p>
+            ) : (
+              <div style={s.participantGrid}>
+                {filteredParticipants.map((p) => {
+                  const checked = plan.participantIds.includes(p.id);
+                  return (
+                    <div
+                      key={p.id}
+                      style={{ ...s.participantCard, ...(checked ? s.participantCardActive : {}) }}
+                      onClick={() => toggleParticipant(p.id)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        readOnly
+                        style={{ marginRight: 8, cursor: "pointer" }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{p.prenom} {p.nom}</div>
+                        <div style={{ fontSize: 11, color: "#888" }}>
+                          {p.profil?.libelle ?? p.profil?.nom ?? "—"} · {p.structure?.nom ?? "—"}
+                        </div>
+                        {p.email && (
+                          <div style={{ fontSize: 11, color: "#aaa" }}>{p.email}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Actions ── */}
+          <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+            <Btn color="#10b981" onClick={savePlan} disabled={loading}>
+              {loading ? "Enregistrement…" : "💾 Sauvegarder la planification"}
+            </Btn>
+            <Btn color="#6b7280" onClick={goList}>Annuler</Btn>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-const styles = {
-  page: { maxWidth: 1000, margin: "auto", padding: 20 },
-  header: { display: "flex", justifyContent: "space-between" },
-  title: { fontSize: 22 },
-  tabs: { display: "flex", gap: 10 },
-  tab: { padding: 8, cursor: "pointer" },
-  tabActive: { padding: 8, background: "#ddd" },
-  card: { padding: 20, border: "1px solid #ddd", borderRadius: 8 },
-  table: { width: "100%" },
-  th: { textAlign: "left" },
-  td: { padding: 8 },
-  btnPrimary: { background: "blue", color: "#fff", padding: 10 },
-  btnEdit: { background: "orange" },
-  btnDelete: { background: "red", color: "#fff" },
-  btnBlue: { background: "#3b82f6", color: "#fff" },
-  input: { padding: 8, marginBottom: 10, width: "100%" },
-  error: { color: "red" },
-  success: { color: "green" },
-  empty: { textAlign: "center" },
-  participantGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
-  participantCard: { border: "1px solid #ccc", padding: 10, cursor: "pointer" },
-  participantCardActive: { background: "#dbeafe" },
-};
+// ─── Small helpers ─────────────────────────────────────────────────────────────
 
+function fmt(d) {
+  if (!d) return "—";
+  const [y, m, day] = d.split("-");
+  return `${day}/${m}/${y}`;
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label style={s.label}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Btn({ color, onClick, children, disabled, small }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        background: disabled ? "#ccc" : color,
+        color: "#fff",
+        border: "none",
+        borderRadius: 6,
+        padding: small ? "4px 10px" : "8px 16px",
+        fontSize: small ? 12 : 14,
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontWeight: 500,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TabBtn({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "8px 18px",
+        border: "none",
+        borderRadius: 6,
+        cursor: "pointer",
+        fontWeight: active ? 700 : 400,
+        background: active ? "#3b82f6" : "#e5e7eb",
+        color: active ? "#fff" : "#374151",
+        fontSize: 14,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Styles ────────────────────────────────────────────────────────────────────
+
+const s = {
+  page: { maxWidth: 1100, margin: "auto", padding: "24px 16px", fontFamily: "system-ui, sans-serif" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 },
+  pageTitle: { margin: 0, fontSize: 22, fontWeight: 700 },
+  tabBar: { display: "flex", gap: 8 },
+  card: { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: 24, boxShadow: "0 1px 4px #0001" },
+  sectionTitle: { marginTop: 0, fontSize: 18, fontWeight: 600, marginBottom: 20 },
+  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 24px" },
+  label: { display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 4 },
+  input: { width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14, boxSizing: "border-box" },
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: { textAlign: "left", padding: "10px 12px", background: "#f3f4f6", fontSize: 13, fontWeight: 600, borderBottom: "2px solid #e5e7eb" },
+  td: { padding: "10px 12px", borderBottom: "1px solid #f3f4f6", fontSize: 14, verticalAlign: "middle" },
+  row: { transition: "background 0.1s" },
+  badge: { background: "#dbeafe", color: "#1d4ed8", borderRadius: 12, padding: "2px 8px", fontSize: 12, fontWeight: 600 },
+  countBadge: { background: "#e0e7ff", color: "#4338ca", borderRadius: 12, padding: "2px 8px", fontSize: 12, fontWeight: 700 },
+  participantGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 },
+  participantCard: {
+    display: "flex", alignItems: "flex-start", gap: 6,
+    border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 12px",
+    cursor: "pointer", transition: "background 0.15s, border-color 0.15s",
+    background: "#fafafa",
+  },
+  participantCardActive: { background: "#eff6ff", borderColor: "#93c5fd" },
+  info: { textAlign: "center", color: "#6b7280" },
+  alertError: { background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, padding: "10px 16px", color: "#b91c1c" },
+  alertSuccess: { background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: "10px 16px", color: "#15803d" },
+  empty: { textAlign: "center", color: "#9ca3af", padding: "30px 0" },
+};
