@@ -1,6 +1,4 @@
 // src/api.js
-// Centralized API layer for all backend calls
-
 const BASE_URL = "http://localhost:8081/api";
 
 function getToken() {
@@ -31,78 +29,71 @@ async function request(method, path, body) {
 }
 
 // ─── USERS ─────────────────────────────────────────────
-export const getUsers = () => request("GET", "/users");
-export const createUser = (data) => request("POST", "/users", data);
-export const updateUser = (id, data) => request("PUT", `/users/${id}`, data);
-export const deleteUser = (id) => request("DELETE", `/users/${id}`);
+// ✅ Fix : /admin/users au lieu de /users
+export const getUsers    = ()           => request("GET",    "/admin/users");
+export const createUser  = (data)       => request("POST",   "/admin/users", data);
+export const updateUser  = (id, data)   => request("PUT",    `/admin/users/${id}`, data);
+export const deleteUser  = (id)         => request("DELETE", `/admin/users/${id}`);
 
 // ─── FORMATIONS ────────────────────────────────────────
-export const getFormations = () => request("GET", "/formations");
-export const createFormation = (data) => request("POST", "/formations", data);
-export const updateFormation = (id, data) => request("PUT", `/formations/${id}`, data);
-export const deleteFormation = (id) => request("DELETE", `/formations/${id}`);
+export const getFormations    = ()           => request("GET",    "/formations");
+export const createFormation  = (data)       => request("POST",   "/formations", data);
+export const updateFormation  = (id, data)   => request("PUT",    `/formations/${id}`, data);
+export const deleteFormation  = (id)         => request("DELETE", `/formations/${id}`);
 
-/** Remplace la liste complète des participants d'une formation */
 export const setFormationParticipants = (formationId, participantIds) =>
   request("PUT", `/formations/${formationId}/participants`, participantIds);
 
-/** Assigne un formateur à une formation via son id */
 export const assignFormateur = (formationId, formateurId) =>
   request("PUT", `/formations/${formationId}/formateur/${formateurId}`);
 
-/**
- * Planification tout-en-un :
- * assigne formateur + dates + participants en une seule requête.
- * @param {number} formationId
- * @param {{ formateurId?: number, dateDebut?: string, dateFin?: string, participantIds?: number[] }} data
- */
 export const planifierFormation = (formationId, data) =>
   request("PUT", `/formations/${formationId}/planifier`, data);
 
 // ─── FORMATEURS ────────────────────────────────────────
 export const formateurApi = {
-  getAll: () => request("GET", "/formateurs"),
-  create: (data) => request("POST", "/formateurs", data),
-  update: (id, data) => request("PUT", `/formateurs/${id}`, data),
-  delete: (id) => request("DELETE", `/formateurs/${id}`),
+  getAll:  ()           => request("GET",    "/formateurs"),
+  create:  (data)       => request("POST",   "/formateurs", data),
+  update:  (id, data)   => request("PUT",    `/formateurs/${id}`, data),
+  delete:  (id)         => request("DELETE", `/formateurs/${id}`),
 };
 
 // ─── PARTICIPANTS ──────────────────────────────────────
 export const participantApi = {
-  getAll: () => request("GET", "/participants"),
-  create: (data) => request("POST", "/participants", data),
-  update: (id, data) => request("PUT", `/participants/${id}`, data),
-  delete: (id) => request("DELETE", `/participants/${id}`),
+  getAll:  ()           => request("GET",    "/participants"),
+  create:  (data)       => request("POST",   "/participants", data),
+  update:  (id, data)   => request("PUT",    `/participants/${id}`, data),
+  delete:  (id)         => request("DELETE", `/participants/${id}`),
 };
 
 // ─── DOMAINES ──────────────────────────────────────────
 export const domaineApi = {
-  getAll: () => request("GET", "/domaines"),
-  create: (data) => request("POST", "/domaines", data),
-  update: (id, data) => request("PUT", `/domaines/${id}`, data),
-  delete: (id) => request("DELETE", `/domaines/${id}`),
+  getAll:  ()           => request("GET",    "/domaines"),
+  create:  (data)       => request("POST",   "/domaines", data),
+  update:  (id, data)   => request("PUT",    `/domaines/${id}`, data),
+  delete:  (id)         => request("DELETE", `/domaines/${id}`),
 };
 
 // ─── PROFILS ───────────────────────────────────────────
 export const profilApi = {
-  getAll: () => request("GET", "/profils"),
-  create: (data) => request("POST", "/profils", data),
-  update: (id, data) => request("PUT", `/profils/${id}`, data),
-  delete: (id) => request("DELETE", `/profils/${id}`),
+  getAll:  ()           => request("GET",    "/profils"),
+  create:  (data)       => request("POST",   "/profils", data),
+  update:  (id, data)   => request("PUT",    `/profils/${id}`, data),
+  delete:  (id)         => request("DELETE", `/profils/${id}`),
 };
 
 // ─── STRUCTURES ────────────────────────────────────────
 export const structureApi = {
-  getAll: () => request("GET", "/structures"),
-  create: (data) => request("POST", "/structures", data),
-  update: (id, data) => request("PUT", `/structures/${id}`, data),
-  delete: (id) => request("DELETE", `/structures/${id}`),
+  getAll:  ()           => request("GET",    "/structures"),
+  create:  (data)       => request("POST",   "/structures", data),
+  update:  (id, data)   => request("PUT",    `/structures/${id}`, data),
+  delete:  (id)         => request("DELETE", `/structures/${id}`),
 };
 
 // ─── EMPLOYEURS ────────────────────────────────────────
 export const employeurApi = {
-  getAll: () => request("GET", "/employeurs"),
-  create: (data) => request("POST", "/employeurs", data),
-  update: (id, data) => request("PUT", `/employeurs/${id}`, data),
-  delete: (id) => request("DELETE", `/employeurs/${id}`),
+  getAll:  ()           => request("GET",    "/employeurs"),
+  create:  (data)       => request("POST",   "/employeurs", data),
+  update:  (id, data)   => request("PUT",    `/employeurs/${id}`, data),
+  delete:  (id)         => request("DELETE", `/employeurs/${id}`),
 };

@@ -26,7 +26,7 @@ public class Formation {
     private Integer annee;
 
     @Min(value = 1, message = "La durée doit être supérieure à 0")
-    private int duree; // nombre de jours
+    private int duree;
 
     private double budget;
 
@@ -34,24 +34,26 @@ public class Formation {
 
     private LocalDate dateFin;
 
-    // ✅ Relation avec Domaine
+    // ✅ EAGER obligatoire pour éviter "no session" lors de la sérialisation JSON
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "domaine_id", nullable = true)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Domaine domaine;
 
-    // ✅ Relation avec Formateur
+    // ✅ EAGER obligatoire
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "formateur_id", nullable = true)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Formateur formateur;
 
-    // ✅ Relation ManyToMany avec Participant
+    // ✅ EAGER obligatoire
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "formation_participants",
             joinColumns = @JoinColumn(name = "formation_id"),
             inverseJoinColumns = @JoinColumn(name = "participant_id")
     )
-    @JsonIgnoreProperties({"formations"})
+    @JsonIgnoreProperties({"formations", "hibernateLazyInitializer", "handler"})
     private Set<Participant> participants = new HashSet<>();
 
     public Formation() {}

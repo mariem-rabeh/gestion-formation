@@ -21,13 +21,11 @@ public class Participant {
 
     private String tel;
 
-    // ✅ Relation avec Structure
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)          // ✅ LAZY : pas de SELECT séparé à chaque chargement
     @JoinColumn(name = "structure_id", nullable = false)
     private Structure structure;
 
-    // ✅ Relation avec Profil
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)          // ✅ LAZY
     @JoinColumn(name = "profil_id", nullable = false)
     private Profil profil;
 

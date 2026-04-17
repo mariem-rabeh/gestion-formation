@@ -4,6 +4,7 @@ import com.formation.dto.PlanificationRequest;
 import com.formation.model.Formation;
 import com.formation.service.FormationService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,79 +19,68 @@ public class FormationController {
         this.formationService = formationService;
     }
 
-    // GET /api/formations
+    // ✅ @Transactional ici garantit que la session reste ouverte pendant la sérialisation JSON
+    @Transactional(readOnly = true)
     @GetMapping
     public List<Formation> getAll() {
         return formationService.findAll();
     }
 
-    // GET /api/formations/{id}
+    @Transactional(readOnly = true)
     @GetMapping("/{id}")
     public ResponseEntity<Formation> getById(@PathVariable Long id) {
         return ResponseEntity.ok(formationService.findById(id));
     }
 
-    // POST /api/formations
+    @Transactional
     @PostMapping
     public ResponseEntity<Formation> create(@RequestBody Formation formation) {
         return ResponseEntity.ok(formationService.save(formation));
     }
 
-    // PUT /api/formations/{id}
+    @Transactional
     @PutMapping("/{id}")
     public ResponseEntity<Formation> update(@PathVariable Long id,
                                             @RequestBody Formation formation) {
         return ResponseEntity.ok(formationService.update(id, formation));
     }
 
-    // DELETE /api/formations/{id}
+    @Transactional
     @DeleteMapping("/{id}")
     public ResponseEntity<String> delete(@PathVariable Long id) {
         formationService.delete(id);
         return ResponseEntity.ok("Formation supprimée avec succès");
     }
 
-    // ✅ POST /api/formations/{id}/participants — ajouter participants
+    @Transactional
     @PostMapping("/{id}/participants")
     public ResponseEntity<Formation> addParticipants(@PathVariable Long id,
                                                      @RequestBody List<Long> participantIds) {
         return ResponseEntity.ok(formationService.addParticipants(id, participantIds));
     }
 
-    // ✅ PUT /api/formations/{id}/participants — remplacer tous les participants
+    @Transactional
     @PutMapping("/{id}/participants")
     public ResponseEntity<Formation> setParticipants(@PathVariable Long id,
                                                      @RequestBody List<Long> participantIds) {
         return ResponseEntity.ok(formationService.setParticipants(id, participantIds));
     }
 
-    // ✅ DELETE /api/formations/{id}/participants/{participantId}
+    @Transactional
     @DeleteMapping("/{id}/participants/{participantId}")
     public ResponseEntity<Formation> removeParticipant(@PathVariable Long id,
                                                        @PathVariable Long participantId) {
         return ResponseEntity.ok(formationService.removeParticipant(id, participantId));
     }
 
-    // ✅ PUT /api/formations/{id}/formateur/{formateurId} — assigner formateur
+    @Transactional
     @PutMapping("/{id}/formateur/{formateurId}")
     public ResponseEntity<Formation> assignFormateur(@PathVariable Long id,
                                                      @PathVariable Long formateurId) {
         return ResponseEntity.ok(formationService.assignFormateur(id, formateurId));
     }
 
-    /**
-     * ✅ PUT /api/formations/{id}/planifier
-     * Endpoint tout-en-un : assigne formateur + dates + participants en une seule requête.
-     * Utilisé par la page de planification frontend.
-     *
-     * Body JSON :
-     * {
-     *   "formateurId": 3,
-     *   "dateDebut": "2025-09-01",
-     *   "dateFin": "2025-09-05",
-     *   "participantIds": [1, 4, 7]
-     * }
-     */
+    @Transactional
     @PutMapping("/{id}/planifier")
     public ResponseEntity<Formation> planifier(@PathVariable Long id,
                                                @RequestBody PlanificationRequest req) {

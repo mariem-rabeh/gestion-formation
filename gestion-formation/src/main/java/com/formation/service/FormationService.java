@@ -28,20 +28,26 @@ public class FormationService {
         this.participantRepository = participantRepository;
     }
 
+    // ✅ @Transactional pour garder la session ouverte pendant la sérialisation JSON
+    @Transactional(readOnly = true)
     public List<Formation> findAll() {
         return formationRepository.findAll();
     }
 
+    // ✅ @Transactional pour garder la session ouverte
+    @Transactional(readOnly = true)
     public Formation findById(Long id) {
         return formationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Formation non trouvée avec l'id : " + id));
     }
 
+    @Transactional
     public Formation save(Formation formation) {
         resolveRelations(formation);
         return formationRepository.save(formation);
     }
 
+    @Transactional
     public Formation update(Long id, Formation updated) {
         Formation existing = findById(id);
         existing.setTitre(updated.getTitre());
@@ -70,12 +76,13 @@ public class FormationService {
         return formationRepository.save(existing);
     }
 
+    @Transactional
     public void delete(Long id) {
         findById(id);
         formationRepository.deleteById(id);
     }
 
-    // ─── Participants ─────────────────────────────────────────────────────────
+    // ─── Participants ──────────────────────────────────────────────────────────
 
     @Transactional
     public Formation addParticipants(Long formationId, List<Long> participantIds) {
@@ -99,7 +106,7 @@ public class FormationService {
         return formationRepository.save(formation);
     }
 
-    // ─── Formateur ────────────────────────────────────────────────────────────
+    // ─── Formateur ─────────────────────────────────────────────────────────────
 
     @Transactional
     public Formation assignFormateur(Long formationId, Long formateurId) {
@@ -110,36 +117,26 @@ public class FormationService {
         return formationRepository.save(formation);
     }
 
-    // ─── Planification tout-en-un ─────────────────────────────────────────────
+    // ─── Planification tout-en-un ──────────────────────────────────────────────
 
-    /**
-     * Assigne en une seule transaction :
-     *  - le formateur (optionnel)
-     *  - les dates de début et de fin (optionnelles)
-     *  - la liste complète des participants (optionnelle)
-     */
     @Transactional
     public Formation planifier(Long formationId, PlanificationRequest req) {
         Formation formation = findById(formationId);
 
-        // Formateur
         if (req.getFormateurId() != null) {
             Formateur formateur = formateurRepository.findById(req.getFormateurId())
                     .orElseThrow(() -> new RuntimeException("Formateur non trouvé : " + req.getFormateurId()));
             formation.setFormateur(formateur);
         }
 
-        // Dates
         if (req.getDateDebut() != null) formation.setDateDebut(req.getDateDebut());
         if (req.getDateFin() != null)   formation.setDateFin(req.getDateFin());
 
-        // Validation cohérence des dates
         if (formation.getDateDebut() != null && formation.getDateFin() != null
                 && formation.getDateFin().isBefore(formation.getDateDebut())) {
             throw new RuntimeException("La date de fin doit être postérieure à la date de début");
         }
 
-        // Participants
         if (req.getParticipantIds() != null) {
             formation.setParticipants(resolveParticipants(req.getParticipantIds()));
         }
@@ -147,7 +144,7 @@ public class FormationService {
         return formationRepository.save(formation);
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    // ─── Helpers ───────────────────────────────────────────────────────────────
 
     private Set<Participant> resolveParticipants(List<Long> ids) {
         return ids.stream()

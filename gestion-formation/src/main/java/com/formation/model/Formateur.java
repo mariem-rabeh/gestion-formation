@@ -20,12 +20,10 @@ public class Formateur {
 
     private String tel;
 
-    // "interne" ou "externe"
     @Column(nullable = false)
-    private String type;
+    private String type; // "interne" ou "externe"
 
-    // ✅ Relation avec Employeur — null si formateur interne
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)          // ✅ LAZY : null si formateur interne, pas de JOIN inutile
     @JoinColumn(name = "employeur_id", nullable = true)
     private Employeur employeur;
 

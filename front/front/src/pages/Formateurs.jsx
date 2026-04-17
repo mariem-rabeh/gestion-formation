@@ -6,10 +6,14 @@ function getToken() {
   return localStorage.getItem("token");
 }
 
-const headers = () => ({
+const authHeaders = () => ({
   "Content-Type": "application/json",
   Authorization: `Bearer ${getToken()}`
 });
+
+// ✅ Fonctions de validation
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const isValidTel = (tel) => /^\d{8,}$/.test(tel);
 
 function Formateurs() {
   const [formateurs, setFormateurs] = useState([]);
@@ -22,14 +26,13 @@ function Formateurs() {
   const emptyForm = { nom: "", prenom: "", email: "", tel: "", type: "interne", employeurId: "" };
   const [form, setForm] = useState(emptyForm);
 
-  // ✅ Charger formateurs et employeurs
   const fetchFormateurs = async () => {
-    const res = await fetch(API_URL, { headers: headers() });
+    const res = await fetch(API_URL, { headers: authHeaders() });
     setFormateurs(await res.json());
   };
 
   const fetchEmployeurs = async () => {
-    const res = await fetch(`${API_URL}/employeurs`, { headers: headers() });
+    const res = await fetch(`${API_URL}/employeurs`, { headers: authHeaders() });
     setEmployeurs(await res.json());
   };
 
@@ -43,7 +46,6 @@ function Formateurs() {
     setForm(prev => ({
       ...prev,
       [name]: value,
-      // ✅ Si on passe à "interne", vider l'employeur
       ...(name === "type" && value === "interne" ? { employeurId: "" } : {})
     }));
   };
@@ -57,12 +59,9 @@ function Formateurs() {
 
   const handleEdit = (f) => {
     setForm({
-      nom: f.nom,
-      prenom: f.prenom,
-      email: f.email || "",
-      tel: f.tel || "",
-      type: f.type,
-      employeurId: f.employeur?.id || ""
+      nom: f.nom, prenom: f.prenom,
+      email: f.email || "", tel: f.tel || "",
+      type: f.type, employeurId: f.employeur?.id || ""
     });
     setEditingId(f.id);
     setShowForm(true);
@@ -73,25 +72,25 @@ function Formateurs() {
     e.preventDefault();
     setError("");
 
-    if (!form.nom.trim() || !form.prenom.trim()) return setError("Nom et prénom obligatoires");
+    // ✅ Validations
+    if (!form.nom.trim()) return setError("Le nom est obligatoire");
+    if (!form.prenom.trim()) return setError("Le prénom est obligatoire");
+    if (form.email && !isValidEmail(form.email)) return setError("Format email invalide (ex: nom@domaine.com)");
+    if (form.tel && !isValidTel(form.tel)) return setError("Téléphone invalide — minimum 8 chiffres");
     if (form.type === "externe" && !form.employeurId) return setError("Veuillez sélectionner un employeur");
 
     const body = {
-      nom: form.nom,
-      prenom: form.prenom,
-      email: form.email,
-      tel: form.tel,
-      type: form.type,
+      nom: form.nom, prenom: form.prenom,
+      email: form.email, tel: form.tel, type: form.type,
       employeur: form.type === "externe" && form.employeurId
-        ? { id: parseInt(form.employeurId) }
-        : null
+        ? { id: parseInt(form.employeurId) } : null
     };
 
     const method = editingId ? "PUT" : "POST";
     const url = editingId ? `${API_URL}/${editingId}` : API_URL;
 
     try {
-      const res = await fetch(url, { method, headers: headers(), body: JSON.stringify(body) });
+      const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(body) });
       if (!res.ok) throw new Error();
       setShowForm(false);
       fetchFormateurs();
@@ -101,16 +100,16 @@ function Formateurs() {
   };
 
   const handleDelete = async (id) => {
-    await fetch(`${API_URL}/${id}`, { method: "DELETE", headers: headers() });
+    await fetch(`${API_URL}/${id}`, { method: "DELETE", headers: authHeaders() });
     setConfirmDeleteId(null);
     fetchFormateurs();
   };
 
-  const inputStyle = {
-    padding: "9px 12px", borderRadius: 8,
-    border: "1px solid #ddd", fontSize: 14,
+  const inputStyle = (invalid) => ({
+    padding: "9px 12px", borderRadius: 8, fontSize: 14,
+    border: `1px solid ${invalid ? "#E24B4A" : "#ddd"}`,
     width: "100%", boxSizing: "border-box"
-  };
+  });
 
   const btnStyle = (color) => ({
     padding: "8px 16px", borderRadius: 8, border: "none",
@@ -131,7 +130,13 @@ function Formateurs() {
         <button onClick={handleAdd} style={btnStyle("#378ADD")}>+ Ajouter</button>
       </div>
 
-      {error && <p style={{ color: "#E24B4A", marginTop: 12, fontSize: 13 }}>{error}</p>}
+      {error && (
+        <div style={{
+          background: "#fef2f2", border: "1px solid #fca5a5",
+          borderRadius: 8, padding: "10px 14px", marginTop: 12,
+          color: "#E24B4A", fontSize: 13
+        }}>⚠️ {error}</div>
+      )}
 
       {/* ✅ Formulaire */}
       {showForm && (
@@ -142,39 +147,77 @@ function Formateurs() {
           <h3 style={{ marginTop: 0 }}>{editingId ? "Modifier le formateur" : "Nouveau formateur"}</h3>
           <form onSubmit={handleSubmit} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
 
-            <input name="nom" placeholder="Nom *" value={form.nom}
-              onChange={handleChange} required style={inputStyle} />
-            <input name="prenom" placeholder="Prénom *" value={form.prenom}
-              onChange={handleChange} required style={inputStyle} />
-            <input name="email" type="email" placeholder="Email"
-              value={form.email} onChange={handleChange} style={inputStyle} />
-            <input name="tel" placeholder="Téléphone"
-              value={form.tel} onChange={handleChange} style={inputStyle} />
+            {/* Nom */}
+            <div>
+              <input name="nom" placeholder="Nom *" value={form.nom}
+                onChange={handleChange} required
+                style={inputStyle(!form.nom.trim() && form.nom !== "")} />
+              {!form.nom.trim() && form.nom !== "" && (
+                <p style={{ color: "#E24B4A", fontSize: 12, margin: "4px 0 0" }}>Nom obligatoire</p>
+              )}
+            </div>
 
-            {/* ✅ Choix type */}
+            {/* Prénom */}
+            <div>
+              <input name="prenom" placeholder="Prénom *" value={form.prenom}
+                onChange={handleChange} required
+                style={inputStyle(!form.prenom.trim() && form.prenom !== "")} />
+              {!form.prenom.trim() && form.prenom !== "" && (
+                <p style={{ color: "#E24B4A", fontSize: 12, margin: "4px 0 0" }}>Prénom obligatoire</p>
+              )}
+            </div>
+
+            {/* Email */}
+            <div>
+              <input name="email" type="text" placeholder="Email (ex: nom@domaine.com)"
+                value={form.email} onChange={handleChange}
+                style={inputStyle(form.email && !isValidEmail(form.email))} />
+              {form.email && !isValidEmail(form.email) && (
+                <p style={{ color: "#E24B4A", fontSize: 12, margin: "4px 0 0" }}>Format email invalide</p>
+              )}
+            </div>
+
+            {/* Téléphone */}
+            <div>
+              <input name="tel" placeholder="Téléphone (8 chiffres min)"
+                value={form.tel} onChange={handleChange}
+                style={inputStyle(form.tel && !isValidTel(form.tel))} />
+              {form.tel && !isValidTel(form.tel) && (
+                <p style={{ color: "#E24B4A", fontSize: 12, margin: "4px 0 0" }}>Minimum 8 chiffres</p>
+              )}
+            </div>
+
+            {/* Type */}
             <div style={{ gridColumn: "1 / -1" }}>
               <label style={{ fontSize: 13, color: "#555", display: "block", marginBottom: 6 }}>
                 Type de formateur *
               </label>
-              <select name="type" value={form.type} onChange={handleChange} style={inputStyle}>
-                <option value="interne">Interne</option>
-                <option value="externe">Externe</option>
+              <select name="type" value={form.type} onChange={handleChange}
+                style={inputStyle(false)}>
+                <option value="interne">Interne (Green Building)</option>
+                <option value="externe">Externe (autre structure)</option>
               </select>
             </div>
 
-            {/* ✅ Champ conditionnel — affiché uniquement si "externe" */}
+            {/* Employeur conditionnel */}
             {form.type === "externe" && (
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={{ fontSize: 13, color: "#555", display: "block", marginBottom: 6 }}>
-                  Employeur *
+                  Employeur * <span style={{ color: "#888" }}>(obligatoire pour formateur externe)</span>
                 </label>
                 <select name="employeurId" value={form.employeurId}
-                  onChange={handleChange} style={inputStyle} required>
+                  onChange={handleChange} required
+                  style={inputStyle(!form.employeurId)}>
                   <option value="">-- Sélectionner un employeur --</option>
                   {employeurs.map(e => (
                     <option key={e.id} value={e.id}>{e.nomEmployeur}</option>
                   ))}
                 </select>
+                {!form.employeurId && (
+                  <p style={{ color: "#E24B4A", fontSize: 12, margin: "4px 0 0" }}>
+                    Employeur obligatoire pour un formateur externe
+                  </p>
+                )}
               </div>
             )}
 
@@ -190,7 +233,7 @@ function Formateurs() {
         </div>
       )}
 
-      {/* ✅ Table */}
+      {/* Table */}
       <table style={{
         width: "100%", marginTop: 24, borderCollapse: "collapse",
         fontSize: 14, background: "#fff", borderRadius: 10, overflow: "hidden",
@@ -237,7 +280,7 @@ function Formateurs() {
         </tbody>
       </table>
 
-      {/* ✅ Modal confirmation suppression */}
+      {/* Modal suppression */}
       {confirmDeleteId && (
         <div style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
